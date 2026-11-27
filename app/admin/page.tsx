@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { signOut } from "@/app/actions";
 import { requireAdmin } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createQuestion, createSubject, importQuestionsCsv } from "@/app/admin/actions";
 
 type Props = { searchParams: Promise<{ error?: string; message?: string }> };
@@ -13,7 +14,8 @@ export default async function AdminPage({ searchParams }: Props) {
     .select("id, name, description, is_active")
     .order("name");
 
-  const { count: questionCount } = await supabase
+  const admin = createAdminClient();
+  const { count: questionCount } = await admin
     .from("questions")
     .select("id", { count: "exact", head: true });
 
