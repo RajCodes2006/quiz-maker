@@ -503,6 +503,11 @@ begin
     raise exception 'Invalid quiz submission' using errcode = '22023';
   end if;
 
+  -- Serialize submissions for this student so concurrent quizzes cannot exceed the retention limit.
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(p_user_id::text, 0)
+  );
+
   select * into v_session
   from public.quiz_sessions
   where id = p_session_id and user_id = p_user_id
@@ -572,6 +577,22 @@ begin
   update public.quiz_sessions
   set submitted_at = pg_catalog.now()
   where id = v_session.id;
+
+  -- Keep the new attempt plus the four most recent prior attempts, across all subjects.
+  -- Deleting an attempt cascades to its saved question responses.
+  with ranked_attempts as (
+    select
+      id,
+      pg_catalog.row_number() over (
+        order by (id = v_attempt_id) desc, completed_at desc, id desc
+      ) as position
+    from public.quiz_attempts
+    where user_id = p_user_id
+  )
+  delete from public.quiz_attempts as old_attempt
+  using ranked_attempts
+  where old_attempt.id = ranked_attempts.id
+    and ranked_attempts.position > 5;
 
   return pg_catalog.jsonb_build_object(
     'attemptId', v_attempt_id,
