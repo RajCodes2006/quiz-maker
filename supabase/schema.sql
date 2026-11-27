@@ -558,7 +558,7 @@ begin
     a.key::uuid,
     case
       when pg_catalog.jsonb_typeof(v_session.option_labels -> a.key -> a.value) = 'object'
-      then v_session.option_labels -> a.key -> a.value ->> 'sourceKey'
+      then v_session.option_labels -> a.key -> a.value ->> 'label'
       else null
     end,
     case
