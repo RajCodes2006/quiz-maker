@@ -76,26 +76,65 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This subject is inactive or does not exist." }, { status: 404 });
   }
 
-  const admin = createAdminClient();
-
-  const { data: questions, error: questionError } = await admin
+  // Students are allowed to read published questions via RLS. Verify submitted IDs
+  // through the same authenticated client that loaded the quiz, not the admin client.
+  const { data: questions, error: questionError } = await supabase
     .from("questions")
     .select("id")
     .eq("subject_id", subjectId)
     .eq("is_published", true)
     .in("id", questionIds);
 
-  if (questionError || !questions || questions.length !== questionIds.length) {
-    return NextResponse.json({ error: "The quiz questions could not be verified." }, { status: 400 });
+  if (questionError) {
+    console.error("Quiz submission question verification failed:", {
+      code: questionError.code,
+      message: questionError.message,
+      details: questionError.details,
+      hint: questionError.hint
+    });
+    return NextResponse.json(
+      { error: "Could not verify the quiz questions with your signed-in account. Sign out, sign in again, and retry." },
+      { status: 500 }
+    );
   }
+
+  if (!questions || questions.length !== questionIds.length) {
+    console.error("Quiz submission question count mismatch:", {
+      submittedQuestionCount: questionIds.length,
+      verifiedQuestionCount: questions?.length ?? 0
+    });
+    return NextResponse.json(
+      { error: "Some quiz questions are no longer published or do not belong to this subject. Reload the quiz and try again." },
+      { status: 400 }
+    );
+  }
+
+  const admin = createAdminClient();
 
   const { data: answerKeys, error: answerError } = await admin
     .from("question_answers")
     .select("question_id, correct_option")
     .in("question_id", questionIds);
 
-  if (answerError || !answerKeys || answerKeys.length !== questionIds.length) {
-    return NextResponse.json({ error: "The answer key is incomplete. Contact an administrator." }, { status: 500 });
+  if (answerError) {
+    console.error("Quiz submission answer-key lookup failed:", {
+      code: answerError.code,
+      message: answerError.message,
+      details: answerError.details,
+      hint: answerError.hint
+    });
+    return NextResponse.json(
+      { error: "The server could not access the answer key. Check that SUPABASE_SECRET_KEY belongs to the same project as NEXT_PUBLIC_SUPABASE_URL." },
+      { status: 500 }
+    );
+  }
+
+  if (!answerKeys || answerKeys.length !== questionIds.length) {
+    console.error("Quiz submission answer-key count mismatch:", {
+      submittedQuestionCount: questionIds.length,
+      answerKeyCount: answerKeys?.length ?? 0
+    });
+    return NextResponse.json({ error: "The answer key is incomplete for this quiz. Contact an administrator." }, { status: 500 });
   }
 
   const answerMap = new Map(answerKeys.map((item) => [item.question_id, item.correct_option]));
