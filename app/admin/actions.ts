@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { parseCsv } from "@/lib/csv";
 
 async function requireAdminClient() {
   const supabase = await createClient();
@@ -19,66 +20,6 @@ async function requireAdminClient() {
 
   if (profile?.role !== "admin") redirect("/dashboard");
   return supabase;
-}
-
-type CsvRecord = { cells: string[]; line: number };
-
-function parseCsv(input: string): { records: CsvRecord[]; error?: string } {
-  const records: CsvRecord[] = [];
-  let cells: string[] = [];
-  let field = "";
-  let inQuotes = false;
-  let line = 1;
-  let recordLine = 1;
-
-  for (let i = 0; i < input.length; i += 1) {
-    const char = input[i];
-
-    if (inQuotes) {
-      if (char === '"') {
-        if (input[i + 1] === '"') {
-          field += '"';
-          i += 1;
-        } else {
-          inQuotes = false;
-        }
-      } else {
-        field += char;
-        if (char === "\n") line += 1;
-      }
-      continue;
-    }
-
-    if (char === '"' && field.length === 0) {
-      inQuotes = true;
-    } else if (char === ",") {
-      cells.push(field);
-      field = "";
-    } else if (char === "\n" || char === "\r") {
-      cells.push(field);
-      if (cells.some((value) => value.trim() !== "")) {
-        records.push({ cells, line: recordLine });
-      }
-      cells = [];
-      field = "";
-      if (char === "\r" && input[i + 1] === "\n") i += 1;
-      line += 1;
-      recordLine = line;
-    } else if (char === '"') {
-      return { records: [], error: "Unexpected quote in CSV near line " + line };
-    } else {
-      field += char;
-    }
-  }
-
-  if (inQuotes) return { records: [], error: "A quoted field was not closed." };
-
-  cells.push(field);
-  if (cells.some((value) => value.trim() !== "")) {
-    records.push({ cells, line: recordLine });
-  }
-
-  return { records };
 }
 
 export async function createSubject(formData: FormData) {
@@ -108,7 +49,7 @@ export async function createSubject(formData: FormData) {
 }
 
 export async function createQuestion(formData: FormData) {
-  const subjectId = String(formData.get("subject_id") || "");
+  const subjectId = String(formData.get("subject_id") || "").trim();
   const questionText = String(formData.get("question_text") || "").trim();
   const optionA = String(formData.get("option_a") || "").trim();
   const optionB = String(formData.get("option_b") || "").trim();
@@ -125,36 +66,23 @@ export async function createQuestion(formData: FormData) {
   }
 
   const supabase = await requireAdminClient();
-  const { data: question, error } = await supabase
-    .from("questions")
-    .insert({
-      subject_id: subjectId,
-      question_text: questionText,
-      option_a: optionA,
-      option_b: optionB,
-      option_c: optionC,
-      option_d: optionD,
-      is_published: true
-    })
-    .select("id")
-    .single();
-
-  if (error || !question) {
-    redirect("/admin?error=" + encodeURIComponent(error?.message || "Could not save question"));
-  }
-
-  const { error: answerError } = await supabase.from("question_answers").insert({
-    question_id: question.id,
-    correct_option: correctOption
+  const { error } = await supabase.rpc("create_question_with_answer", {
+    p_subject_id: subjectId,
+    p_question_text: questionText,
+    p_option_a: optionA,
+    p_option_b: optionB,
+    p_option_c: optionC,
+    p_option_d: optionD,
+    p_correct_option: correctOption
   });
 
-  if (answerError) {
-    await supabase.from("questions").delete().eq("id", question.id);
-    redirect("/admin?error=" + encodeURIComponent(answerError.message));
+  if (error) {
+    redirect("/admin?error=" + encodeURIComponent(error.message));
   }
 
   revalidatePath("/admin");
   revalidatePath("/dashboard");
+  revalidatePath("/quiz/" + subjectId);
   redirect("/admin?message=Question+added");
 }
 
@@ -277,40 +205,24 @@ export async function importQuestionsCsv(formData: FormData) {
 
   const questionRows = validRows.map((row) => ({
     id: randomUUID(),
-    subject_id: subjectId,
     question_text: row.question_text,
     option_a: row.option_a,
     option_b: row.option_b,
     option_c: row.option_c,
     option_d: row.option_d,
-    is_published: true
+    correct_option: row.correct_option
   }));
 
-  const { error: questionsError } = await supabase
-    .from("questions")
-    .insert(questionRows);
+  // A single PostgreSQL function inserts questions and answer keys atomically.
+  const { data: importedCount, error: importError } = await supabase.rpc(
+    "import_questions_with_answers",
+    { p_subject_id: subjectId, p_rows: questionRows }
+  );
 
-  if (questionsError) {
-    redirect("/admin?error=" + encodeURIComponent(questionsError.message));
-  }
-
-  const answerRows = questionRows.map((question, index) => ({
-    question_id: question.id,
-    correct_option: validRows[index].correct_option
-  }));
-
-  const { error: answersError } = await supabase
-    .from("question_answers")
-    .insert(answerRows);
-
-  if (answersError) {
-    await supabase
-      .from("questions")
-      .delete()
-      .in("id", questionRows.map((question) => question.id));
+  if (importError || importedCount !== validRows.length) {
     redirect(
       "/admin?error=" +
-      encodeURIComponent("Answer keys could not be saved; the imported questions were rolled back. " + answersError.message)
+      encodeURIComponent(importError?.message || "The database did not confirm the complete import.")
     );
   }
 
