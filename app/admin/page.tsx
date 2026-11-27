@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { signOut } from "@/app/actions";
 import { requireAdmin } from "@/lib/auth";
-import { createQuestion, createSubject } from "@/app/admin/actions";
+import { createQuestion, createSubject, importQuestionsCsv } from "@/app/admin/actions";
 
 type Props = { searchParams: Promise<{ error?: string; message?: string }> };
 
@@ -53,6 +53,43 @@ export default async function AdminPage({ searchParams }: Props) {
             <button className="button" type="submit">Create subject</button>
           </form>
         </div>
+      </section>
+
+      <section className="panel" style={{ marginTop: 20 }}>
+        <h2>Import many questions</h2>
+        <p className="muted">
+          Upload a CSV to add up to 500 MCQs to one subject at once. Every row must include
+          the question, options A–D, and the correct option. Nothing is imported if any row is invalid.
+        </p>
+        {subjects && subjects.length > 0 ? (
+          <form action={importQuestionsCsv}>
+            <div className="field">
+              <label htmlFor="bulk-question-subject">Subject for these questions</label>
+              <select id="bulk-question-subject" name="subject_id" required defaultValue="">
+                <option value="" disabled>Select a subject</option>
+                {subjects.map((subject) => (
+                  <option value={subject.id} key={subject.id}>{subject.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="field">
+              <label htmlFor="questions-csv">CSV file</label>
+              <input id="questions-csv" name="csv_file" type="file" accept=".csv,text/csv" required />
+            </div>
+            <div className="app-header-actions" style={{ justifyContent: "flex-start", gap: 12 }}>
+              <button className="button" type="submit">Upload questions</button>
+              <a className="button button-quiet" href="/question-template.csv" download>
+                Download CSV template
+              </a>
+            </div>
+          </form>
+        ) : (
+          <div className="empty-state">Create a subject first, then import questions into it.</div>
+        )}
+        <p className="muted" style={{ marginTop: 14 }}>
+          Required CSV columns: question_text, option_a, option_b, option_c, option_d, correct_option.
+          Use A, B, C, or D in the correct_option column.
+        </p>
       </section>
 
       <section className="panel" style={{ marginTop: 20 }}>
