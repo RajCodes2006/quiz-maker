@@ -6,8 +6,9 @@ on:
   pull_request:
     branches: [main]
 
+# CI executes pull-request code: it must never receive a write-capable token.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -20,35 +21,15 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version-file: .nvmrc
-
-      # Bootstrap the lockfile once, then keep it in sync with package.json.
-      - name: Generate or refresh npm lockfile
-        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
-
-      - name: Commit generated lockfile
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          if [ ! -f package-lock.json ]; then
-            echo "npm did not generate package-lock.json"
-            exit 1
-          fi
-          git add package-lock.json
-          if git diff --cached --quiet; then
-            echo "package-lock.json is already current"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "chore: generate npm lockfile"
-          git push origin HEAD:main
+          cache: npm
 
       - name: Install exact dependency tree
         run: npm ci --ignore-scripts --no-audit --no-fund
 
       - name: Audit dependency vulnerabilities
-        run: npm audit --audit-level=high
+        run: npm audit --audit-level=moderate
 
-      - name: Run regression tests
+      - name: Run regression and security tests
         run: npm test
 
       - name: Check TypeScript
