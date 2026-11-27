@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Script from "next/script";
 import ThemeToggle from "@/components/theme-toggle";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "CU Quiz | Chandigarh University",
@@ -25,6 +26,7 @@ export default function RootLayout({
         </Script>
         {children}
         <ThemeToggle />
+        <SpeedInsights />
       </body>
     </html>
   );
