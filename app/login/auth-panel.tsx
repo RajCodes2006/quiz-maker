@@ -117,9 +117,6 @@ export default function AuthPanel({ configured, initialMode, error, message }: P
           <button className="button auth-submit" type="submit" disabled={!configured}>
             Create student account <span aria-hidden="true">→</span>
           </button>
-          <p className="auth-form-note">
-            Admin access is assigned separately by the project owner.
-          </p>
         </form>
       ) : (
         <form action={signIn} className="auth-form">
