@@ -73,14 +73,12 @@ export default async function ResultPage({ params }: Props) {
         if (!question) return [];
 
         const correctOption = answerById.get(questionId) ?? null;
-        const correctText = correctOption
-          ? ({
-              A: question.option_a,
-              B: question.option_b,
-              C: question.option_c,
-              D: question.option_d
-            }[correctOption] ?? null)
-          : null;
+        const correctText =
+          correctOption === "A" ? question.option_a :
+          correctOption === "B" ? question.option_b :
+          correctOption === "C" ? question.option_c :
+          correctOption === "D" ? question.option_d :
+          null;
 
         return [{
           id: question.id,
@@ -117,7 +115,7 @@ export default async function ResultPage({ params }: Props) {
             </div>
             {!reviewUnavailable && (
               <span className="review-count">
-                {wrongQuestions.length} {wrongQuestions.length === 1 ? "wrong" : "wrong"}
+                {wrongQuestions.length} incorrect
               </span>
             )}
           </div>
