@@ -4,6 +4,7 @@ import Script from "next/script";
 import ThemeToggle from "@/components/theme-toggle";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 
 export const metadata: Metadata = {
   title: "CU Quiz | Chandigarh University",
@@ -29,6 +30,7 @@ export default function RootLayout({
         <ThemeToggle />
         <SpeedInsights />
         <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
