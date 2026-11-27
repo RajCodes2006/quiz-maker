@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseAdminConfigured } from "@/lib/supabase/env";
+import { enforceRateLimits, getTrustedClientIp } from "@/lib/rate-limit";
+import { HttpRequestError, isSameOriginRequest, readJsonRequest } from "@/lib/http";
 
 const QUESTION_COUNTS = [10, 20, 40, 80];
 
@@ -11,6 +13,10 @@ type StartBody = {
 };
 
 export async function POST(request: Request) {
+  if (!isSameOriginRequest(request)) {
+    return NextResponse.json({ error: "Cross-origin requests are not allowed." }, { status: 403 });
+  }
+
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -25,10 +31,39 @@ export async function POST(request: Request) {
     );
   }
 
+  const ip = getTrustedClientIp(request.headers);
+  const limits = [
+    { namespace: "api:quiz-start:user", identifier: user.id, limit: 10, windowSeconds: 60 },
+    ...(ip
+      ? [{ namespace: "api:quiz-start:ip", identifier: ip, limit: 180, windowSeconds: 60 }]
+      : [])
+  ];
+
+  try {
+    const allowed = await enforceRateLimits(limits);
+    if (!allowed) {
+      return NextResponse.json(
+        { error: "Too many quiz requests. Please wait before trying again." },
+        { status: 429, headers: { "Cache-Control": "no-store" } }
+      );
+    }
+  } catch {
+    return NextResponse.json(
+      { error: "Security checks are temporarily unavailable. Please retry." },
+      { status: 503 }
+    );
+  }
+
   let body: StartBody;
   try {
-    body = await request.json();
-  } catch {
+    body = await readJsonRequest<StartBody>(request, 2_048);
+  } catch (error) {
+    const status = error instanceof HttpRequestError ? error.status : 400;
+    const message = error instanceof HttpRequestError ? error.message : "Invalid request body.";
+    return NextResponse.json({ error: message }, { status });
+  }
+
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
