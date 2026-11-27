@@ -53,9 +53,13 @@ create table if not exists public.quiz_responses (
   attempt_id uuid not null references public.quiz_attempts(id) on delete cascade,
   question_id uuid not null references public.questions(id),
   selected_option text check (selected_option in ('A', 'B', 'C', 'D')),
+  selected_option_text text,
   is_correct boolean not null default false,
   unique (attempt_id, question_id)
 );
+
+alter table public.quiz_responses
+  add column if not exists selected_option_text text;
 
 create index if not exists questions_subject_published_idx
   on public.questions(subject_id, is_published);
@@ -428,8 +432,12 @@ begin
       pg_catalog.max(token) filter (where source_key = correct_option) as correct_token,
       pg_catalog.jsonb_object_agg(
         token,
-        case option_position
-          when 1 then 'A' when 2 then 'B' when 3 then 'C' else 'D' end
+        pg_catalog.jsonb_build_object(
+          'label', case option_position
+            when 1 then 'A' when 2 then 'B' when 3 then 'C' else 'D' end,
+          'sourceKey', source_key,
+          'text', option_text
+        )
       ) as label_map
     from option_rows
     group by id, question_text, question_order
@@ -543,12 +551,21 @@ begin
   returning id into v_attempt_id;
 
   insert into public.quiz_responses (
-    attempt_id, question_id, selected_option, is_correct
+    attempt_id, question_id, selected_option, selected_option_text, is_correct
   )
   select
     v_attempt_id,
     a.key::uuid,
-    (v_session.option_labels -> a.key) ->> a.value,
+    case
+      when pg_catalog.jsonb_typeof(v_session.option_labels -> a.key -> a.value) = 'object'
+      then v_session.option_labels -> a.key -> a.value ->> 'sourceKey'
+      else null
+    end,
+    case
+      when pg_catalog.jsonb_typeof(v_session.option_labels -> a.key -> a.value) = 'object'
+      then v_session.option_labels -> a.key -> a.value ->> 'text'
+      else null
+    end,
     a.value = (v_session.answer_tokens ->> a.key)
   from pg_catalog.jsonb_each_text(p_answers) as a(key, value);
 
@@ -566,4 +583,3 @@ $$;
 
 revoke all on function public.submit_quiz_session(uuid,uuid,jsonb) from public, anon, authenticated;
 grant execute on function public.submit_quiz_session(uuid,uuid,jsonb) to service_role;
-
