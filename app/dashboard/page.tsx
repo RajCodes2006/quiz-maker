@@ -27,7 +27,8 @@ export default async function DashboardPage() {
     .from("quiz_attempts")
     .select("id, subject_id, score, total_questions, completed_at")
     .eq("user_id", user.id)
-    .order("completed_at", { ascending: false });
+    .order("completed_at", { ascending: false })
+    .limit(5);
 
   return (
     <main className="app-shell">
@@ -64,7 +65,7 @@ export default async function DashboardPage() {
       </section>
 
       <section className="panel" style={{ marginTop: 30 }}>
-        <div className="section-heading"><h2>All attempts</h2><span className="muted">Your complete quiz history</span></div>
+        <div className="section-heading"><h2>Last 5 attempts</h2><span className="muted">Your five most recent quiz results</span></div>
         {attempts && attempts.length > 0 ? (
           <div className="table-scroll">
             <table className="table-list">
