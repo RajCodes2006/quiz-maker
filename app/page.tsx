@@ -62,12 +62,12 @@ export default async function HomePage() {
           </div>
           <div className="mock-progress"><span /></div>
           <p className="question-kicker">QUESTION 04 / 10</p>
-          <h2>Which data structure follows the FIFO principle?</h2>
-          <div className="mock-option"><span>A</span> Stack</div>
-          <div className="mock-option selected"><span>B</span> Queue <b>✓</b></div>
-          <div className="mock-option"><span>C</span> Tree</div>
-          <div className="mock-option"><span>D</span> Graph</div>
-          <div className="mock-footer"><span>ADSA · Fundamentals</span><span>Sample UI</span></div>
+          <h2>Which concept means acting without waiting for others to direct you?</h2>
+          <div className="mock-option"><span>A</span> Opportunity recognition</div>
+          <div className="mock-option"><span>B</span> Calculated risk</div>
+          <div className="mock-option selected"><span>C</span> Initiative <b>✓</b></div>
+          <div className="mock-option"><span>D</span> Innovation</div>
+          <div className="mock-footer"><span>Entrepreneurship Mindset</span><span>Sample UI</span></div>
         </div>
       </section>
 
