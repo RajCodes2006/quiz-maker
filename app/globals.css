@@ -764,3 +764,34 @@ button:focus-visible, a:focus-visible {
   .question-result-topline { align-items: flex-start; }
   .question-results-heading h2 { font-size: 20px; }
 }
+
+
+/* Selected and correct answer details on quiz results */
+.question-answer-details {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+.question-answer-line {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.question-answer-line strong {
+  display: inline-block;
+  margin-right: 3px;
+}
+.question-answer-line.your-answer {
+  background: var(--soft);
+  color: var(--text-soft);
+}
+.question-answer-line.correct-answer {
+  background: var(--mint);
+  color: var(--mint-ink);
+}
+.question-answer-line.correct-answer strong {
+  color: var(--mint-ink);
+}
