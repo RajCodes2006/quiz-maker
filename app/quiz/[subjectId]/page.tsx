@@ -6,19 +6,6 @@ import QuizClient, { type QuizQuestion } from "./quiz-client";
 type Props = { params: Promise<{ subjectId: string }> };
 type OptionKey = "A" | "B" | "C" | "D";
 
-const OPTION_KEYS: OptionKey[] = ["A", "B", "C", "D"];
-
-function shuffleArray<T>(items: T[]): T[] {
-  const shuffled = [...items];
-
-  for (let index = shuffled.length - 1; index > 0; index--) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
-  }
-
-  return shuffled;
-}
-
 export default async function QuizPage({ params }: Props) {
   const { subjectId } = await params;
   const { supabase } = await requireUser();
@@ -32,12 +19,13 @@ export default async function QuizPage({ params }: Props) {
 
   if (!subject) notFound();
 
+  // Load the published question pool so students can choose quizzes up to 80 questions.
   const { data: questions, error } = await supabase
     .from("questions")
     .select("id, question_text, option_a, option_b, option_c, option_d")
     .eq("subject_id", subjectId)
     .eq("is_published", true)
-    .limit(20);
+    .limit(1000);
 
   if (error) {
     return <main className="quiz-wrap"><div className="panel"><h1>Could not load quiz</h1><p className="muted">{error.message}</p><Link href="/dashboard">Back to subjects</Link></div></main>;
@@ -47,24 +35,16 @@ export default async function QuizPage({ params }: Props) {
     return <main className="quiz-wrap"><div className="panel"><h1>No questions yet</h1><p className="muted">The admin has not added questions for {subject.name} yet.</p><Link href="/dashboard">Back to subjects</Link></div></main>;
   }
 
-  const quizQuestions: QuizQuestion[] = shuffleArray(questions).map((question) => {
-    const shuffledOptions = shuffleArray([
-      { sourceKey: "A" as const, text: question.option_a },
-      { sourceKey: "B" as const, text: question.option_b },
-      { sourceKey: "C" as const, text: question.option_c },
-      { sourceKey: "D" as const, text: question.option_d }
-    ]);
-
-    return {
-      id: question.id,
-      question_text: question.question_text,
-      options: shuffledOptions.map((option, index) => ({
-        key: OPTION_KEYS[index],
-        sourceKey: option.sourceKey,
-        text: option.text
-      }))
-    };
-  });
+  const quizQuestions: QuizQuestion[] = questions.map((question) => ({
+    id: question.id,
+    question_text: question.question_text,
+    options: [
+      { key: "A" as OptionKey, sourceKey: "A" as OptionKey, text: question.option_a },
+      { key: "B" as OptionKey, sourceKey: "B" as OptionKey, text: question.option_b },
+      { key: "C" as OptionKey, sourceKey: "C" as OptionKey, text: question.option_c },
+      { key: "D" as OptionKey, sourceKey: "D" as OptionKey, text: question.option_d }
+    ]
+  }));
 
   return (
     <main className="quiz-wrap">
