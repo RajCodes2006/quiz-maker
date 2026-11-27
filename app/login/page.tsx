@@ -34,7 +34,7 @@ export default async function LoginPage({ searchParams }: Props) {
 
           <div className="auth-aside-bottom">
             <span className="auth-aside-dot" />
-            <span>Made for CU students</span>
+            <span>Made for CU of students by students of CU</span>
           </div>
         </aside>
 
