@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Script from "next/script";
 import ThemeToggle from "@/components/theme-toggle";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Analytics } from "@vercel/analytics/next";
 
 export const metadata: Metadata = {
@@ -26,6 +27,7 @@ export default function RootLayout({
         </Script>
         {children}
         <ThemeToggle />
+        <SpeedInsights />
         <Analytics />
       </body>
     </html>
