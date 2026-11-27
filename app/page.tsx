@@ -1,26 +1,6 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
 
-export default async function HomePage() {
-  let signedIn = false;
-  let dashboardHref = "/login";
-
-  if (isSupabaseConfigured()) {
-    const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    signedIn = Boolean(user);
-
-    if (user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
-      dashboardHref = profile?.role === "admin" ? "/admin" : "/dashboard";
-    }
-  }
-
+export default function HomePage() {
   return (
     <main className="site-shell">
       <header className="topbar">
@@ -30,9 +10,7 @@ export default async function HomePage() {
         </Link>
         <nav className="nav-links">
           <Link href="/login">Sign in</Link>
-          <Link className="button button-small" href={dashboardHref}>
-            {signedIn ? "Open dashboard" : "Get started"}
-          </Link>
+          <Link className="button button-small" href="/login">Get started</Link>
         </nav>
       </header>
 
@@ -45,8 +23,8 @@ export default async function HomePage() {
             track your attempts and build confidence before exams.
           </p>
           <div className="hero-actions">
-            <Link className="button" href={dashboardHref}>
-              {signedIn ? "Go to dashboard" : "Start practising"} <span aria-hidden="true">→</span>
+            <Link className="button" href="/login">
+              Start practising <span aria-hidden="true">→</span>
             </Link>
             <Link className="button button-quiet" href="/login">Admin / student login</Link>
           </div>
