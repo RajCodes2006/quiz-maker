@@ -12,10 +12,13 @@ declare
   v_answer_count integer;
   v_result jsonb;
   v_rejected boolean := false;
-  v_attempts_before bigint;
-  v_attempts_after bigint;
   v_saved_selections bigint;
   v_attempt_id uuid;
+  v_attempt_count bigint;
+  v_seed_index integer;
+  v_seed_attempt_id uuid;
+  v_oldest_seed_attempt_id uuid;
+  v_test_question_id uuid;
 begin
   select id into v_user_id
   from public.profiles
@@ -33,8 +36,40 @@ begin
     raise exception 'Test requires a student profile and active subject';
   end if;
 
-  select count(*) into v_attempts_before
-  from public.quiz_attempts where user_id = v_user_id;
+  select id into v_test_question_id
+  from public.questions
+  where subject_id = v_subject_id and is_published = true
+  order by id
+  limit 1;
+
+  if v_test_question_id is null then
+    raise exception 'Test requires at least one published question';
+  end if;
+
+  -- Seed six old attempts inside this rollback-only test transaction.
+  for v_seed_index in 1..6 loop
+    insert into public.quiz_attempts (
+      user_id, subject_id, total_questions, correct_count, score, completed_at
+    ) values (
+      v_user_id,
+      v_subject_id,
+      10,
+      0,
+      0,
+      pg_catalog.now() - pg_catalog.make_interval(days => 365 + v_seed_index)
+    )
+    returning id into v_seed_attempt_id;
+
+    if v_seed_index = 6 then
+      v_oldest_seed_attempt_id := v_seed_attempt_id;
+    end if;
+  end loop;
+
+  insert into public.quiz_responses (
+    attempt_id, question_id, selected_option, selected_option_text, is_correct
+  ) values (
+    v_oldest_seed_attempt_id, v_test_question_id, 'A', 'Retention test option', false
+  );
 
   v_session := public.create_quiz_session(v_user_id, v_subject_id, 10);
 
@@ -118,11 +153,24 @@ begin
     raise exception 'The same quiz session was accepted twice';
   end if;
 
-  select count(*) into v_attempts_after
-  from public.quiz_attempts where user_id = v_user_id;
+  select count(*) into v_attempt_count
+  from public.quiz_attempts
+  where user_id = v_user_id;
 
-  if v_attempts_after <> v_attempts_before + 1 then
-    raise exception 'Quiz submission created an unexpected number of attempts';
+  if v_attempt_count <> 5 then
+    raise exception 'Attempt retention failed: expected exactly five attempts, found %', v_attempt_count;
+  end if;
+
+  if exists (
+    select 1 from public.quiz_attempts where id = v_oldest_seed_attempt_id
+  ) then
+    raise exception 'The oldest attempt was not removed';
+  end if;
+
+  if exists (
+    select 1 from public.quiz_responses where attempt_id = v_oldest_seed_attempt_id
+  ) then
+    raise exception 'Responses belonging to the removed attempt were not deleted';
   end if;
 end;
 $quiz_session_test$;
