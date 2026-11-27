@@ -127,8 +127,8 @@ grant select on public.profiles to authenticated;
 grant update (full_name) on public.profiles to authenticated;
 
 grant select, insert, update, delete on public.subjects to authenticated;
-grant select, insert, update, delete on public.questions to authenticated;
-grant select, insert, update, delete on public.question_answers to authenticated;
+grant insert on public.questions to authenticated;
+grant insert on public.question_answers to authenticated;
 grant select on public.quiz_attempts to authenticated;
 grant select on public.quiz_responses to authenticated;
 
@@ -157,22 +157,20 @@ create policy "Admins manage subjects"
   with check ((select private.is_admin()));
 
 -- Questions: students see published questions; admins manage all questions.
+-- Questions are delivered through server-issued quiz sessions, not direct student reads.
 drop policy if exists "Published questions are readable" on public.questions;
-create policy "Published questions are readable"
-  on public.questions for select to authenticated
-  using (is_published or (select private.is_admin()));
-
 drop policy if exists "Admins manage questions" on public.questions;
-create policy "Admins manage questions"
-  on public.questions for all to authenticated
-  using ((select private.is_admin()))
+drop policy if exists "Admins insert questions" on public.questions;
+create policy "Admins insert questions"
+  on public.questions for insert to authenticated
   with check ((select private.is_admin()));
 
 -- Only admins can access answer keys. Student scoring runs in a server-only API route.
+-- Answer keys remain server-only; admins can add them through the insert RPC.
 drop policy if exists "Admins manage answer keys" on public.question_answers;
-create policy "Admins manage answer keys"
-  on public.question_answers for all to authenticated
-  using ((select private.is_admin()))
+drop policy if exists "Admins insert answer keys" on public.question_answers;
+create policy "Admins insert answer keys"
+  on public.question_answers for insert to authenticated
   with check ((select private.is_admin()));
 
 -- Students can read only their own attempts and responses.
