@@ -29,11 +29,10 @@ export default async function ResultPage({ params }: Props) {
     ? Math.round((attempt.correct_count / attempt.total_questions) * 100)
     : 0;
 
-  // Load every submitted question only after checking that this attempt belongs
-  // to the signed-in user. Correct-answer data never reaches the quiz screen.
+  // Load saved responses only after verifying the attempt belongs to this user.
   const { data: responses, error: responsesError } = await admin
     .from("quiz_responses")
-    .select("question_id, is_correct")
+    .select("question_id, selected_option_text, is_correct")
     .eq("attempt_id", attempt.id)
     .order("question_id", { ascending: true });
 
@@ -41,6 +40,7 @@ export default async function ResultPage({ params }: Props) {
     id: string;
     question_text: string;
     isCorrect: boolean;
+    selectedAnswer: string | null;
     correctAnswer: string | null;
   };
 
@@ -82,11 +82,18 @@ export default async function ResultPage({ params }: Props) {
           correctOption === "D" ? question.option_d :
           null;
 
+        // Older attempts did not save the selected option text. For an older
+        // correct answer, it is safe to infer the selected text from the key.
+        // For older incorrect answers, do not guess which shuffled option was picked.
+        const selectedAnswer = response.selected_option_text
+          || (response.is_correct ? correctAnswer : null);
+
         return [{
           id: question.id,
           question_text: question.question_text,
           isCorrect: response.is_correct,
-          correctAnswer: response.is_correct ? null : correctAnswer
+          selectedAnswer,
+          correctAnswer
         }];
       });
     }
@@ -138,12 +145,18 @@ export default async function ResultPage({ params }: Props) {
                     </span>
                   </div>
                   <h3>{question.question_text}</h3>
-                  {!question.isCorrect && (
-                    <p className="question-correct-answer">
-                      <strong>Correct answer:</strong>{" "}
-                      {question.correctAnswer || "Unavailable"}
+                  <div className="question-answer-details">
+                    <p className="question-answer-line your-answer">
+                      <strong>Your answer:</strong>{" "}
+                      {question.selectedAnswer || "Not recorded for this earlier attempt"}
                     </p>
-                  )}
+                    {!question.isCorrect && (
+                      <p className="question-answer-line correct-answer">
+                        <strong>Correct answer:</strong>{" "}
+                        {question.correctAnswer || "Unavailable"}
+                      </p>
+                    )}
+                  </div>
                 </li>
               ))}
             </ol>
