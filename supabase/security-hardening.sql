@@ -140,3 +140,16 @@ CREATE INDEX IF NOT EXISTS quiz_responses_question_id_idx
   ON public.quiz_responses(question_id);
 CREATE INDEX IF NOT EXISTS quiz_sessions_subject_id_idx
   ON public.quiz_sessions(subject_id);
+
+-- Prevent students from scraping the complete question bank through PostgREST.
+-- Questions/answers are delivered only via the server-issued quiz-session endpoint.
+REVOKE SELECT, UPDATE, DELETE ON public.questions, public.question_answers
+FROM authenticated;
+GRANT INSERT ON public.questions, public.question_answers TO authenticated;
+
+DROP POLICY IF EXISTS "Published questions are readable" ON public.questions;
+DROP POLICY IF EXISTS "Admins manage answer keys" ON public.question_answers;
+DROP POLICY IF EXISTS "Admins insert answer keys" ON public.question_answers;
+CREATE POLICY "Admins insert answer keys"
+  ON public.question_answers FOR INSERT TO authenticated
+  WITH CHECK ((SELECT private.is_admin()));
