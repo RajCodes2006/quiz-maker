@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import Script from "next/script";
 import ThemeToggle from "@/components/theme-toggle";
@@ -10,13 +11,15 @@ export const metadata: Metadata = {
   description: "Subject-wise MCQ practice for Chandigarh University students."
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children
 }: Readonly<{ children: React.ReactNode }>) {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
-        <Script id="theme-initializer" strategy="beforeInteractive">
+        <Script id="theme-initializer" strategy="beforeInteractive" nonce={nonce}>
           {`try {
             var savedTheme = localStorage.getItem("cu-quiz-theme");
             var systemPrefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
@@ -29,7 +32,6 @@ export default function RootLayout({
         <ThemeToggle />
         <SpeedInsights />
         <Analytics />
-        <SpeedInsights />
       </body>
     </html>
   );
