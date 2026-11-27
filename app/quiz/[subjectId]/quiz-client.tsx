@@ -3,10 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+type OptionKey = "A" | "B" | "C" | "D";
+
 export type QuizQuestion = {
   id: string;
   question_text: string;
-  options: { key: "A" | "B" | "C" | "D"; text: string }[];
+  options: { key: OptionKey; sourceKey: OptionKey; text: string }[];
 };
 
 type Props = {
@@ -68,13 +70,13 @@ export default function QuizClient({ subjectId, subjectName, questions }: Props)
       <h1>{question.question_text}</h1>
       <div role="radiogroup" aria-label="Answer options">
         {question.options.map((option) => (
-          <label className={"quiz-option" + (answers[question.id] === option.key ? " active" : "")} key={option.key}>
+          <label className={"quiz-option" + (answers[question.id] === option.sourceKey ? " active" : "")} key={option.key}>
             <input
               type="radio"
               name={"question-" + question.id}
               value={option.key}
-              checked={answers[question.id] === option.key}
-              onChange={() => setAnswers((previous) => ({ ...previous, [question.id]: option.key }))}
+              checked={answers[question.id] === option.sourceKey}
+              onChange={() => setAnswers((previous) => ({ ...previous, [question.id]: option.sourceKey }))}
             />
             <strong>{option.key}.</strong>
             <span>{option.text}</span>
