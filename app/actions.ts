@@ -6,14 +6,14 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export async function signIn(formData: FormData) {
   if (!isSupabaseConfigured()) {
-    redirect("/login?error=Add+your+Supabase+environment+variables");
+    redirect("/login?mode=signin&error=Add+your+Supabase+environment+variables");
   }
 
   const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
 
   if (!email || !password) {
-    redirect("/login?error=Email+and+password+are+required");
+    redirect("/login?mode=signin&error=Email+and+password+are+required");
   }
 
   const supabase = await createClient();
@@ -23,7 +23,7 @@ export async function signIn(formData: FormData) {
   });
 
   if (error || !data.user) {
-    redirect("/login?error=" + encodeURIComponent(error?.message || "Login failed"));
+    redirect("/login?mode=signin&error=" + encodeURIComponent(error?.message || "Login failed"));
   }
 
   const { data: profile } = await supabase
@@ -37,7 +37,7 @@ export async function signIn(formData: FormData) {
 
 export async function signUp(formData: FormData) {
   if (!isSupabaseConfigured()) {
-    redirect("/login?error=Add+your+Supabase+environment+variables");
+    redirect("/login?mode=signup&error=Add+your+Supabase+environment+variables");
   }
 
   const fullName = String(formData.get("full_name") || "").trim();
@@ -45,7 +45,7 @@ export async function signUp(formData: FormData) {
   const password = String(formData.get("password") || "");
 
   if (!fullName || !email || password.length < 8) {
-    redirect("/login?error=Enter+your+name,+email+and+a+password+of+at+least+8+characters");
+    redirect("/login?mode=signup&error=Enter+your+name,+email+and+a+password+of+at+least+8+characters");
   }
 
   const supabase = await createClient();
@@ -61,10 +61,10 @@ export async function signUp(formData: FormData) {
   });
 
   if (error) {
-    redirect("/login?error=" + encodeURIComponent(error.message));
+    redirect("/login?mode=signup&error=" + encodeURIComponent(error.message));
   }
 
-  redirect("/login?message=Account+created.+Check+your+email+if+confirmation+is+enabled.");
+  redirect("/login?mode=signin&message=Account+created.+Check+your+email+if+confirmation+is+enabled.");
 }
 
 export async function signOut() {
