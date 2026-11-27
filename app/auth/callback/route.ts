@@ -28,5 +28,19 @@ export async function GET(request: NextRequest) {
     return loginError(request, "Could not complete Google sign-in. Please try again.");
   }
 
-  return NextResponse.redirect(new URL("/dashboard", request.url));
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return loginError(request, "Your Google session could not be verified. Please try again.");
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  return NextResponse.redirect(
+    new URL(profile?.role === "admin" ? "/admin" : "/dashboard", request.url)
+  );
 }
