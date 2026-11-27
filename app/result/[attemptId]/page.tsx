@@ -19,22 +19,26 @@ export default async function ResultPage({ params }: Props) {
 
   if (!attempt) notFound();
 
-  const { data: subject } = await admin
-    .from("subjects")
-    .select("name")
-    .eq("id", attempt.subject_id)
-    .maybeSingle();
+  // Verify ownership before loading any result details, then fetch independent data together.
+  const [subjectResult, responsesResult] = await Promise.all([
+    admin
+      .from("subjects")
+      .select("name")
+      .eq("id", attempt.subject_id)
+      .maybeSingle(),
+    admin
+      .from("quiz_responses")
+      .select("question_id, selected_option, selected_option_text, is_correct")
+      .eq("attempt_id", attempt.id)
+      .order("question_id", { ascending: true })
+  ]);
+  const subject = subjectResult.data;
+  const responses = responsesResult.data;
+  const responsesError = responsesResult.error;
 
   const percentage = attempt.total_questions > 0
     ? Math.round((attempt.correct_count / attempt.total_questions) * 100)
     : 0;
-
-  // Load saved responses only after verifying the attempt belongs to this user.
-  const { data: responses, error: responsesError } = await admin
-    .from("quiz_responses")
-    .select("question_id, selected_option, selected_option_text, is_correct")
-    .eq("attempt_id", attempt.id)
-    .order("question_id", { ascending: true });
 
   type QuestionResult = {
     id: string;
