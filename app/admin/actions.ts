@@ -3,7 +3,9 @@
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import { enforceRateLimits, getTrustedClientIp } from "@/lib/rate-limit";
 import { parseCsv } from "@/lib/csv";
 
 async function requireAdminClient() {
@@ -19,7 +21,42 @@ async function requireAdminClient() {
     .single();
 
   if (profile?.role !== "admin") redirect("/dashboard");
-  return supabase;
+  return { supabase, user };
+}
+
+async function requireAdminRateLimit(
+  action: string,
+  userId: string,
+  userLimit: number,
+  ipLimit: number,
+  windowSeconds: number
+) {
+  const ip = getTrustedClientIp(await headers());
+  const rules = [
+    {
+      namespace: "admin:" + action + ":user",
+      identifier: userId,
+      limit: userLimit,
+      windowSeconds
+    },
+    ...(ip
+      ? [{
+          namespace: "admin:" + action + ":ip",
+          identifier: ip,
+          limit: ipLimit,
+          windowSeconds
+        }]
+      : [])
+  ];
+
+  let allowed: boolean;
+  try {
+    allowed = await enforceRateLimits(rules);
+  } catch {
+    redirect("/admin?error=Security+checks+are+temporarily+unavailable");
+  }
+
+  if (!allowed) redirect("/admin?error=Too+many+admin+requests.+Please+wait+before+retrying");
 }
 
 export async function createSubject(formData: FormData) {
@@ -34,7 +71,8 @@ export async function createSubject(formData: FormData) {
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
 
-  const supabase = await requireAdminClient();
+  const { supabase, user } = await requireAdminClient();
+  await requireAdminRateLimit("create-subject", user.id, 5, 60, 600);
   const { error } = await supabase.from("subjects").insert({
     name,
     slug,
@@ -65,7 +103,8 @@ export async function createQuestion(formData: FormData) {
     redirect("/admin?error=Complete+the+question+and+all+four+options");
   }
 
-  const supabase = await requireAdminClient();
+  const { supabase, user } = await requireAdminClient();
+  await requireAdminRateLimit("create-question", user.id, 60, 120, 600);
   const { error } = await supabase.rpc("create_question_with_answer", {
     p_subject_id: subjectId,
     p_question_text: questionText,
@@ -100,6 +139,9 @@ export async function importQuestionsCsv(formData: FormData) {
   if (upload.size > 1_000_000) {
     redirect("/admin?error=CSV+file+must+be+smaller+than+1+MB");
   }
+
+  const { supabase, user } = await requireAdminClient();
+  await requireAdminRateLimit("csv-import", user.id, 3, 20, 3600);
 
   const parsed = parseCsv((await upload.text()).replace(/^\uFEFF/, ""));
   if (parsed.error) redirect("/admin?error=" + encodeURIComponent(parsed.error));
@@ -192,7 +234,6 @@ export async function importQuestionsCsv(formData: FormData) {
     redirect("/admin?error=No+valid+questions+found+in+the+CSV");
   }
 
-  const supabase = await requireAdminClient();
   const { data: subject, error: subjectError } = await supabase
     .from("subjects")
     .select("id")
