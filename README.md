@@ -1,88 +1,211 @@
-# CU Quiz Platform
+# CU Quiz
 
-A subject-wise MCQ practice platform for Chandigarh University. Students can practise published quizzes and review their scores; admins maintain subjects, questions, and answer keys.
+A subject-wise MCQ practice platform for Chandigarh University. Students can practise randomized quizzes, track their attempts, and review results. Admins manage subjects and question banks.
+
+## Features
+
+### For students
+- Email/password registration and sign-in.
+- Google sign-in through Supabase Auth.
+- Student dashboard with active subjects and recent attempts.
+- Choose a quiz length of **10, 20, 40, or 80 questions**, depending on the published question pool.
+- Random question selection and shuffled option order for each quiz.
+- One-question-at-a-time interface with progress, previous/next navigation, and answer tracking.
+- Server-side scoring and saved results.
+
+### For admins
+- Role-protected admin workspace.
+- Create subjects and four-option MCQs.
+- Import questions in bulk using a CSV file (up to 500 rows and 1 MB per upload).
+- Keep correct answers in a separate answer-key table.
 
 ## Tech stack
 
-- Next.js 16 App Router + TypeScript
-- Supabase Auth with cookie-based SSR sessions
-- Supabase PostgreSQL + Row Level Security
-- Vercel hosting
-- No separate Render service is needed for this starter
+- **Framework:** Next.js 16 App Router
+- **Language:** TypeScript
+- **UI:** React 19
+- **Authentication and database:** Supabase Auth + PostgreSQL
+- **Database security:** Row Level Security (RLS), explicit grants, and server-only data access
+- **Hosting and observability:** Vercel, Vercel Analytics, and Speed Insights
+- **Automation:** GitHub Actions CI and Dependabot
 
-## Features in this starter
+## Requirements
 
-- Student registration and email/password login
-- One Supabase Auth system with role-based admin/student routing
-- Admin dashboard to create subjects and four-option MCQs
-- Separate answer-key table so students cannot query correct answers
-- Student dashboard showing active subjects and recent attempts
-- One-question-at-a-time quiz flow
-- Server-side scoring and saved quiz results
-- RLS policies for profiles, subjects, questions, answer keys, attempts, and responses
+- Node.js 22 or later
+- npm
+- A Supabase project
+- A Vercel account for deployment
 
-## 1. Run locally
+## Run locally
 
-Use Node.js 22 or later.
+1. Clone this repository:
 
-1. Clone the repository.
-2. Install dependencies with npm install.
-3. Copy .env.example to .env.local.
-4. Add your Supabase project URL and publishable key.
-5. Set NEXT_PUBLIC_SITE_URL to http://localhost:3000 for local development.
-6. Add a server-only Supabase secret key as SUPABASE_SECRET_KEY.
-7. Run the SQL in supabase/schema.sql in the Supabase SQL Editor.
-8. Run supabase/security-hardening.sql after the main schema to apply the database privilege and rate-limit protections.
-9. Start the app with npm run dev and open http://localhost:3000.
+   ```bash
+   git clone https://github.com/RajCodes2006/quiz-maker.git
+   cd quiz-maker
+   ```
 
-Required environment variables:
+2. Install dependencies:
 
-- NEXT_PUBLIC_SUPABASE_URL
-- NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-- NEXT_PUBLIC_SITE_URL
-- SUPABASE_SECRET_KEY (server-only; needed for scoring and result storage)
+   ```bash
+   npm install
+   ```
 
-Do not put the Supabase secret/service-role key in any NEXT_PUBLIC_ variable or commit it to GitHub.
+3. Copy the example environment file:
 
-## 2. Configure Supabase
+   ```bash
+   cp .env.example .env.local
+   ```
 
-Create a Supabase project, then run supabase/schema.sql in the SQL Editor. Check the project's Data API settings and make sure the public schema is exposed to the API. The SQL applies explicit grants and enables RLS on every app table.
+4. Set the required environment variables in `.env.local`:
 
-In Authentication settings, configure the Site URL and redirect URLs for local development and the deployed Vercel domain. The callback route is /auth/callback.
+   | Variable | Description |
+   | --- | --- |
+   | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+   | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase publishable key |
+   | `NEXT_PUBLIC_SITE_URL` | App URL, such as `http://localhost:3000` locally |
+   | `SUPABASE_SECRET_KEY` | Server-only Supabase secret key used by trusted server code |
 
-New registrations are always students. The signup form does not accept a role value.
+5. In the Supabase SQL Editor, run the database scripts in this order:
+   1. `supabase/schema.sql`
+   2. `supabase/security-hardening.sql`
 
-## 3. Promote the first admin
+6. Start the development server:
 
-1. Register your own account through the app.
-2. Confirm your email if email confirmation is enabled.
-3. In the Supabase SQL Editor, run the following query after replacing the email:
+   ```bash
+   npm run dev
+   ```
 
-    update public.profiles
-    set role = 'admin'
-    where id = (select id from auth.users where email = 'your-admin-email@example.com');
+7. Open [http://localhost:3000](http://localhost:3000).
 
-4. Sign out and sign in again. Your account should route to /admin.
+**Never** expose `SUPABASE_SECRET_KEY` through a `NEXT_PUBLIC_*` variable or commit `.env.local` (or any file containing real credentials) to GitHub.
 
-Only the database owner should promote admins. Never expose the role update operation in the student UI.
+## Configure Supabase Auth
 
-## 4. Deploy to Vercel
+In your Supabase project:
 
-Import this GitHub repository into Vercel and add the same environment variables in Project Settings → Environment Variables. Set NEXT_PUBLIC_SITE_URL to the production URL and deploy the main branch. Add the Vercel production URL and preview URLs to Supabase Auth's allowed redirect URLs.
+1. Set the Auth **Site URL** to your application URL.
+2. Add the relevant callback URLs to the allowed redirect URLs:
+   - Local: `http://localhost:3000/auth/callback`
+   - Production: `https://your-domain.com/auth/callback`
+   - Add any Vercel preview callback URLs you intend to use.
+3. Configure email confirmation according to your project's requirements.
 
-No Render backend is required right now. Next.js route handlers run on Vercel and perform quiz scoring with the server-only Supabase key.
+### Enable Google sign-in
 
-## Important security notes
+1. Create a Google OAuth client in Google Cloud Console.
+2. Add Supabase's Google callback URL as an authorized redirect URI:
 
-- Correct answers live in question_answers, not in the questions table returned to students.
-- The student-facing browser only receives the Supabase publishable key.
-- SUPABASE_SECRET_KEY is used only in trusted server-side code for scoring and storing results.
-- RLS is enabled on all public app tables.
-- Never disable RLS to fix an access problem. Check the grants and policies instead.
+   ```text
+   https://<your-project-ref>.supabase.co/auth/v1/callback
+   ```
 
-## Current starter limitations
+3. Enable the **Google** provider in Supabase Authentication and enter the Google OAuth client ID and secret.
+4. Add your app's local and production `/auth/callback` URLs to Supabase's allowed redirect URLs.
 
-- Admins can add subjects and questions; editing/deleting content and bulk CSV upload are not included yet.
-- Quizzes currently show up to 20 published questions for a subject.
-- All displayed questions must be answered before submission.
-- No timer, randomized question order, leaderboard, or analytics yet.
+The login page starts Google OAuth with the current app origin and returns through `/auth/callback`.
+
+## Create the first admin
+
+New accounts are created as students. Promote an account to admin from the Supabase SQL Editor only:
+
+```sql
+UPDATE public.profiles
+SET role = 'admin'
+WHERE id = (
+  SELECT id
+  FROM auth.users
+  WHERE email = 'your-admin-email@example.com'
+);
+```
+
+Replace the email with the account you want to promote. Then sign out and sign in again. Admins are routed to `/admin`; students are routed to `/dashboard`.
+
+Do not add role selection to the public signup form or expose role updates to students.
+
+## Import questions with CSV
+
+The admin workspace includes a CSV import form. Select the destination subject and upload a CSV with these exact column names:
+
+```csv
+question_text,option_a,option_b,option_c,option_d,correct_option
+```
+
+- `correct_option` must be `A`, `B`, `C`, or `D`.
+- Every question must have all four options.
+- Maximum upload size: 1 MB.
+- Maximum rows per import: 500 questions.
+- The import is validated before insertion; invalid rows prevent the batch from being imported.
+- A sample header file is available at [public/question-template.csv](public/question-template.csv).
+
+## Security model
+
+Security checks are enforced in both the application and the database:
+
+- RLS is enabled on the app's public tables, with explicit grants and policies.
+- Admin-only server checks protect admin pages and mutations.
+- Students cannot directly read the questions table or answer-key table through the Supabase Data API.
+- Quiz questions and opaque option tokens are issued through the server-side quiz-session flow; correct answers remain server-side.
+- Quiz sessions are single-use and expire. Result access is restricted to the attempt owner.
+- Database-backed rate limiting protects authentication, quiz, and admin operations. Rate-limit identifiers are hashed rather than stored as raw email addresses or IP addresses.
+- Quiz APIs validate request origin, content type, and request-body size.
+- Production responses use a nonce-based Content Security Policy and security headers, including HSTS, frame protection, and MIME-sniffing protection.
+- The Supabase secret key is used only in server-side code.
+
+Do not disable RLS or broaden table grants as a workaround for access errors. Fix the relevant policy or server-side query instead.
+
+## Quality checks
+
+Run the project's checks locally:
+
+```bash
+npm test
+npm run typecheck
+npm run build
+npm audit --audit-level=moderate
+```
+
+GitHub Actions runs dependency installation, the audit, automated tests, TypeScript checks, and a production build for repository changes. Dependabot checks npm dependencies and GitHub Actions updates weekly.
+
+Database smoke tests are in `supabase/tests/`:
+- `quiz-session-smoke.sql`
+- `security-hardening-smoke.sql`
+
+## Deploy to Vercel
+
+1. Import this GitHub repository into Vercel.
+2. Add the four environment variables listed above in the Vercel project's Environment Variables settings. Use the production URL for `NEXT_PUBLIC_SITE_URL`.
+3. Add the production and required preview `/auth/callback` URLs to Supabase Auth's allowed redirect URLs.
+4. Deploy the `main` branch.
+
+No separate Render service is required. The Next.js application and its API route handlers run on Vercel.
+
+## Project structure
+
+```text
+app/
+  admin/                 Admin workspace and server actions
+  api/quiz/              Quiz start and submission endpoints
+  auth/callback/         Supabase OAuth callback
+  dashboard/             Student dashboard
+  login/                 Sign-in, registration, and Google OAuth
+  quiz/[subjectId]/      Quiz setup and quiz interface
+  result/[attemptId]/    Attempt result page
+lib/
+  auth.ts                Server-side auth and role checks
+  http.ts                API request validation
+  rate-limit.ts          Database-backed rate limiting
+  supabase/              Supabase clients and request proxy
+supabase/
+  schema.sql             Base database schema
+  security-hardening.sql Database security migration
+  tests/                 SQL smoke tests
+tests/                   Automated application tests
+```
+
+## Operational notes
+
+- Run both SQL scripts on a new Supabase database, in the order shown above.
+- If you add a new environment, update its Supabase Auth redirect allowlist.
+- Keep dependencies current and review Dependabot pull requests.
+- This repository includes automated checks and application/database hardening; that is not a substitute for an independent penetration test.
