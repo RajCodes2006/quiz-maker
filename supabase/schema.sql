@@ -220,6 +220,8 @@ create index if not exists quiz_sessions_user_created_idx
 alter table public.quiz_sessions enable row level security;
 revoke all on public.quiz_sessions from public, anon, authenticated;
 grant select, insert, update, delete on public.quiz_sessions to service_role;
+-- The session generator reads the same question pool used by student quiz pages.
+grant select on public.subjects, public.questions to service_role;
 
 -- Single-question admin creation is a single transaction.
 create or replace function public.create_question_with_answer(
