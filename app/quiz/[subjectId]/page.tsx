@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 import QuizClient from "./quiz-client";
 
 type Props = { params: Promise<{ subjectId: string }> };
@@ -19,7 +20,8 @@ export default async function QuizPage({ params }: Props) {
   if (subjectError || !subject) notFound();
 
   // Count the full published pool; the server chooses the requested random subset.
-  const { count, error: questionError } = await supabase
+  const admin = createAdminClient();
+  const { count, error: questionError } = await admin
     .from("questions")
     .select("id", { count: "exact", head: true })
     .eq("subject_id", subjectId)
