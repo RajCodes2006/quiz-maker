@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { signIn, signUp } from "@/app/actions";
+import GoogleSignInButton from "./google-sign-in-button";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 type Props = {
@@ -24,7 +25,7 @@ export default async function LoginPage({ searchParams }: Props) {
         </aside>
         <div className="auth-content">
           <h2>Welcome back</h2>
-          <p>Use your email and password to continue.</p>
+          <p>Sign in with Google or use your email and password.</p>
           {!isSupabaseConfigured() && (
             <div className="notice notice-error">
               Supabase is not connected yet. Copy .env.example to .env.local and add your project URL and publishable key.
@@ -32,6 +33,14 @@ export default async function LoginPage({ searchParams }: Props) {
           )}
           {params.error && <div className="notice notice-error">{params.error}</div>}
           {params.message && <div className="notice">{params.message}</div>}
+
+          {isSupabaseConfigured() && (
+            <>
+              <GoogleSignInButton />
+              <div className="form-divider" />
+              <p className="muted" style={{ textAlign: "center", marginBottom: 18 }}>Or continue with email</p>
+            </>
+          )}
 
           <form action={signIn}>
             <div className="field"><label htmlFor="login-email">Email address</label><input id="login-email" name="email" type="email" autoComplete="email" required /></div>
