@@ -9,15 +9,18 @@ type Props = { searchParams: Promise<{ error?: string; message?: string }> };
 export default async function AdminPage({ searchParams }: Props) {
   const { profile, user, supabase } = await requireAdmin();
   const params = await searchParams;
-  const { data: subjects } = await supabase
-    .from("subjects")
-    .select("id, name, description, is_active")
-    .order("name");
-
   const admin = createAdminClient();
-  const { count: questionCount } = await admin
-    .from("questions")
-    .select("id", { count: "exact", head: true });
+  const [subjectsResult, questionCountResult] = await Promise.all([
+    supabase
+      .from("subjects")
+      .select("id, name, description, is_active")
+      .order("name"),
+    admin
+      .from("questions")
+      .select("id", { count: "exact", head: true })
+  ]);
+  const subjects = subjectsResult.data;
+  const questionCount = questionCountResult.count;
 
   return (
     <main className="app-shell">
