@@ -32,7 +32,8 @@ Use Node.js 22 or later.
 5. Set NEXT_PUBLIC_SITE_URL to http://localhost:3000 for local development.
 6. Add a server-only Supabase secret key as SUPABASE_SECRET_KEY.
 7. Run the SQL in supabase/schema.sql in the Supabase SQL Editor.
-8. Start the app with npm run dev and open http://localhost:3000.
+8. Run supabase/security-hardening.sql after the main schema to apply the database privilege and rate-limit protections.
+9. Start the app with npm run dev and open http://localhost:3000.
 
 Required environment variables:
 
