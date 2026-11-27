@@ -42,6 +42,22 @@ function createSecurityHeaders(request: NextRequest) {
 
 export async function updateSession(request: NextRequest) {
   const { nextResponse } = createSecurityHeaders(request);
+  const pathname = request.nextUrl.pathname;
+  const requiresSession = [
+    "/dashboard",
+    "/admin",
+    "/quiz",
+    "/result",
+    "/api/quiz",
+    "/api/admin"
+  ].some((prefix) => pathname === prefix || pathname.startsWith(prefix + "/"));
+
+  // Keep CSP/security headers on every request, but avoid a Supabase auth
+  // round-trip for public pages and static assets.
+  if (!requiresSession) {
+    return nextResponse();
+  }
+
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
 
