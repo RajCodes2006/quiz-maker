@@ -4,68 +4,91 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 type OptionKey = "A" | "B" | "C" | "D";
-const OPTION_KEYS: OptionKey[] = ["A", "B", "C", "D"];
-const QUESTION_COUNTS = [10, 20, 40, 80] as const;
 
-export type QuizQuestion = {
+type QuizQuestion = {
   id: string;
   question_text: string;
-  options: { key: OptionKey; sourceKey: OptionKey; text: string }[];
+  options: { token: string; label: OptionKey; text: string }[];
 };
 
 type Props = {
   subjectId: string;
   subjectName: string;
-  questions: QuizQuestion[];
+  availableQuestionCount: number;
 };
 
-function shuffleArray<T>(items: T[]): T[] {
-  const shuffled = [...items];
+const QUESTION_COUNTS = [10, 20, 40, 80] as const;
 
-  for (let index = shuffled.length - 1; index > 0; index--) {
-    const randomIndex = Math.floor(Math.random() * (index + 1));
-    [shuffled[index], shuffled[randomIndex]] = [shuffled[randomIndex], shuffled[index]];
-  }
-
-  return shuffled;
-}
-
-export default function QuizClient({ subjectId, subjectName, questions }: Props) {
+export default function QuizClient({
+  subjectId,
+  subjectName,
+  availableQuestionCount
+}: Props) {
   const router = useRouter();
-  const availableCounts = QUESTION_COUNTS.filter((count) => count <= questions.length);
+  const availableCounts = QUESTION_COUNTS.filter(
+    (count) => count <= availableQuestionCount
+  );
+
   const [questionCount, setQuestionCount] = useState<number>(availableCounts[0] ?? 0);
   const [quizStarted, setQuizStarted] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [sessionId, setSessionId] = useState("");
   const [quizQuestions, setQuizQuestions] = useState<QuizQuestion[]>([]);
   const [current, setCurrent] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  function startQuiz() {
-    if (!availableCounts.includes(questionCount as (typeof QUESTION_COUNTS)[number])) return;
+  async function startQuiz() {
+    if (
+      starting ||
+      !availableCounts.includes(questionCount as (typeof QUESTION_COUNTS)[number])
+    ) return;
 
-    // Randomly select the requested number of unique questions, then shuffle each question's options.
-    const selectedQuestions = shuffleArray(questions)
-      .slice(0, questionCount)
-      .map((item) => {
-        const shuffledOptions = shuffleArray(item.options);
-        return {
-          ...item,
-          options: shuffledOptions.map((option, index) => ({
-            ...option,
-            key: OPTION_KEYS[index]
-          }))
-        };
-      });
-
-    setQuizQuestions(selectedQuestions);
-    setCurrent(0);
-    setAnswers({});
+    setStarting(true);
     setError("");
-    setQuizStarted(true);
+
+    try {
+      const response = await fetch("/api/quiz/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ subjectId, questionCount })
+      });
+      const result = await response.json();
+
+      if (!response.ok) {
+        setError(result.error || "Could not start this quiz.");
+        setStarting(false);
+        return;
+      }
+
+      if (
+        typeof result.sessionId !== "string" ||
+        !Array.isArray(result.questions) ||
+        result.questions.length !== questionCount
+      ) {
+        setError("The quiz server returned an incomplete question set. Please retry.");
+        setStarting(false);
+        return;
+      }
+
+      setSessionId(result.sessionId);
+      setQuizQuestions(result.questions as QuizQuestion[]);
+      setCurrent(0);
+      setAnswers({});
+      setQuizStarted(true);
+    } catch {
+      setError("Network error. Please try again.");
+    } finally {
+      setStarting(false);
+    }
   }
 
   async function submitQuiz() {
+    if (submitting || !sessionId || Object.keys(answers).length !== quizQuestions.length) {
+      return;
+    }
+
     setSubmitting(true);
     setError("");
 
@@ -73,11 +96,7 @@ export default function QuizClient({ subjectId, subjectName, questions }: Props)
       const response = await fetch("/api/quiz/submit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          subjectId,
-          questionIds: quizQuestions.map((item) => item.id),
-          answers
-        })
+        body: JSON.stringify({ sessionId, answers })
       });
       const result = await response.json();
 
@@ -99,18 +118,25 @@ export default function QuizClient({ subjectId, subjectName, questions }: Props)
       <section className="panel quiz-question">
         <div className="quiz-top">
           <span className="eyebrow">{subjectName}</span>
-          <span>{questions.length} questions available</span>
+          <span>{availableQuestionCount} questions available</span>
         </div>
         <div className="question-kicker">CUSTOMIZE YOUR QUIZ</div>
         <h1>How many questions do you want to attempt?</h1>
-        <p className="muted">Choose your quiz length. Questions and options will be randomized.</p>
+        <p className="muted">
+          Choose your quiz length. The server will randomly select questions and shuffle the options.
+        </p>
         <div
           role="radiogroup"
           aria-label="Number of questions"
-          style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 12, margin: "24px 0" }}
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: 12,
+            margin: "24px 0"
+          }}
         >
           {QUESTION_COUNTS.map((count) => {
-            const disabled = count > questions.length;
+            const disabled = count > availableQuestionCount;
             const selected = questionCount === count;
             return (
               <button
@@ -120,7 +146,7 @@ export default function QuizClient({ subjectId, subjectName, questions }: Props)
                 aria-checked={selected}
                 aria-label={count + " questions"}
                 className={"button" + (selected ? "" : " button-quiet")}
-                disabled={disabled}
+                disabled={disabled || starting}
                 onClick={() => setQuestionCount(count)}
                 style={{ opacity: disabled ? 0.4 : 1, minWidth: 0 }}
               >
@@ -130,10 +156,18 @@ export default function QuizClient({ subjectId, subjectName, questions }: Props)
           })}
         </div>
         {availableCounts.length === 0 && (
-          <p className="notice notice-error">At least 10 published questions are required to start a quiz.</p>
+          <p className="notice notice-error">
+            At least 10 published questions with answer keys are required to start a quiz.
+          </p>
         )}
-        <button className="button" type="button" onClick={startQuiz} disabled={questionCount === 0}>
-          Start quiz →
+        {error && <div className="notice notice-error" role="alert">{error}</div>}
+        <button
+          className="button"
+          type="button"
+          onClick={startQuiz}
+          disabled={starting || questionCount === 0}
+        >
+          {starting ? "Preparing quiz..." : "Start quiz →"}
         </button>
       </section>
     );
@@ -156,31 +190,57 @@ export default function QuizClient({ subjectId, subjectName, questions }: Props)
       <h1>{question.question_text}</h1>
       <div role="radiogroup" aria-label="Answer options">
         {question.options.map((option) => (
-          <label className={"quiz-option" + (answers[question.id] === option.sourceKey ? " active" : "")} key={option.key}>
+          <label
+            className={"quiz-option" + (answers[question.id] === option.token ? " active" : "")}
+            key={option.token}
+          >
             <input
               type="radio"
               name={"question-" + question.id}
-              value={option.key}
-              checked={answers[question.id] === option.sourceKey}
-              onChange={() => setAnswers((previous) => ({ ...previous, [question.id]: option.sourceKey }))}
+              value={option.token}
+              checked={answers[question.id] === option.token}
+              onChange={() =>
+                setAnswers((previous) => ({ ...previous, [question.id]: option.token }))
+              }
             />
-            <strong>{option.key}.</strong>
+            <strong>{option.label}.</strong>
             <span>{option.text}</span>
           </label>
         ))}
       </div>
-      {error && <div className="notice notice-error">{error}</div>}
+      {error && <div className="notice notice-error" role="alert">{error}</div>}
       <div className="quiz-controls">
-        <button className="button button-quiet" type="button" onClick={() => setCurrent((value) => Math.max(0, value - 1))} disabled={current === 0}>Previous</button>
+        <button
+          className="button button-quiet"
+          type="button"
+          onClick={() => setCurrent((value) => Math.max(0, value - 1))}
+          disabled={current === 0 || submitting}
+        >
+          Previous
+        </button>
         {current < quizQuestions.length - 1 ? (
-          <button className="button" type="button" onClick={() => setCurrent((value) => value + 1)}>Next question →</button>
+          <button
+            className="button"
+            type="button"
+            onClick={() => setCurrent((value) => value + 1)}
+            disabled={submitting}
+          >
+            Next question →
+          </button>
         ) : (
-          <button className="button" type="button" onClick={submitQuiz} disabled={submitting || answered !== quizQuestions.length}>
+          <button
+            className="button"
+            type="button"
+            onClick={submitQuiz}
+            disabled={submitting || answered !== quizQuestions.length}
+          >
             {submitting ? "Submitting..." : "Submit quiz"}
           </button>
         )}
       </div>
-      <p className="muted" style={{ marginTop: 16 }}>{answered} of {quizQuestions.length} answered. Answer every question to submit.</p>
+      <p className="muted" style={{ marginTop: 16 }}>
+        {answered} of {quizQuestions.length} answered. Answer every question to submit.
+      </p>
     </section>
   );
 }
