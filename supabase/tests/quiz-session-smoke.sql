@@ -14,6 +14,8 @@ declare
   v_rejected boolean := false;
   v_attempts_before bigint;
   v_attempts_after bigint;
+  v_saved_selections bigint;
+  v_attempt_id uuid;
 begin
   select id into v_user_id
   from public.profiles
@@ -89,6 +91,16 @@ begin
 
   if (v_result ->> 'totalQuestions')::integer <> 10 then
     raise exception 'Quiz result has an invalid question count';
+  end if;
+
+  v_attempt_id := (v_result ->> 'attemptId')::uuid;
+  select count(*) into v_saved_selections
+  from public.quiz_responses
+  where attempt_id = v_attempt_id
+    and selected_option_text is not null;
+
+  if v_saved_selections <> 10 then
+    raise exception 'Selected option text was not saved for every answer';
   end if;
 
   v_rejected := false;
