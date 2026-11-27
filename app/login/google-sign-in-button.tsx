@@ -11,17 +11,22 @@ export default function GoogleSignInButton() {
     setLoading(true);
     setError("");
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: window.location.origin + "/auth/callback",
-        scopes: "openid email profile"
-      }
-    });
+    try {
+      const supabase = createClient();
+      const { error: authError } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: window.location.origin + "/auth/callback",
+          scopes: "openid email profile"
+        }
+      });
 
-    if (authError) {
-      setError(authError.message);
+      if (authError) {
+        setError(authError.message);
+        setLoading(false);
+      }
+    } catch {
+      setError("Could not start Google sign-in. Please try again.");
       setLoading(false);
     }
   }
