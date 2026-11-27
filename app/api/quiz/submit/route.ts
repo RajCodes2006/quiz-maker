@@ -4,9 +4,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseAdminConfigured } from "@/lib/supabase/env";
 
 type SubmitBody = {
-  subjectId?: string;
-  questionIds?: string[];
-  answers?: Record<string, string>;
+  sessionId?: unknown;
+  answers?: unknown;
 };
 
 export async function POST(request: Request) {
@@ -18,7 +17,10 @@ export async function POST(request: Request) {
   }
 
   if (!isSupabaseAdminConfigured()) {
-    return NextResponse.json({ error: "Server scoring is not configured. Add SUPABASE_SECRET_KEY." }, { status: 503 });
+    return NextResponse.json(
+      { error: "Server-side quiz scoring is not configured." },
+      { status: 503 }
+    );
   }
 
   let body: SubmitBody;
@@ -28,149 +30,64 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const subjectId = body.subjectId;
-  const questionIds = body.questionIds;
-  const answers = body.answers || {};
+  const sessionId = body.sessionId;
+  const answers = body.answers;
 
   if (
-    typeof subjectId !== "string" ||
-    !Array.isArray(questionIds) ||
-    questionIds.length < 1 ||
-    questionIds.length > 100 ||
-    questionIds.some((id) => typeof id !== "string") ||
-    new Set(questionIds).size !== questionIds.length
+    typeof sessionId !== "string" ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sessionId) ||
+    !answers ||
+    typeof answers !== "object" ||
+    Array.isArray(answers)
   ) {
     return NextResponse.json({ error: "Invalid quiz submission." }, { status: 400 });
   }
 
-  for (const questionId of questionIds) {
-    const selected = answers[questionId];
-    if (selected && !["A", "B", "C", "D"].includes(selected)) {
-      return NextResponse.json({ error: "One or more selected options are invalid." }, { status: 400 });
-    }
-  }
-
-  // Verify the subject with the same authenticated client that loaded the quiz.
-  // This avoids a false "unavailable" result caused by a mismatched server-only key.
-  const { data: subject, error: subjectError } = await supabase
-    .from("subjects")
-    .select("id")
-    .eq("id", subjectId)
-    .eq("is_active", true)
-    .maybeSingle();
-
-  if (subjectError) {
-    console.error("Quiz submission subject lookup failed:", {
-      code: subjectError.code,
-      message: subjectError.message,
-      details: subjectError.details,
-      hint: subjectError.hint
-    });
+  const answerEntries = Object.entries(answers as Record<string, unknown>);
+  if (
+    ![10, 20, 40, 80].includes(answerEntries.length) ||
+    answerEntries.some(([questionId, token]) =>
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(questionId) ||
+      typeof token !== "string" ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(token)
+    )
+  ) {
     return NextResponse.json(
-      { error: "Could not verify this subject with your signed-in account. Please sign in again and retry." },
-      { status: 500 }
-    );
-  }
-
-  if (!subject) {
-    return NextResponse.json({ error: "This subject is inactive or does not exist." }, { status: 404 });
-  }
-
-  // Students are allowed to read published questions via RLS. Verify submitted IDs
-  // through the same authenticated client that loaded the quiz, not the admin client.
-  const { data: questions, error: questionError } = await supabase
-    .from("questions")
-    .select("id")
-    .eq("subject_id", subjectId)
-    .eq("is_published", true)
-    .in("id", questionIds);
-
-  if (questionError) {
-    console.error("Quiz submission question verification failed:", {
-      code: questionError.code,
-      message: questionError.message,
-      details: questionError.details,
-      hint: questionError.hint
-    });
-    return NextResponse.json(
-      { error: "Could not verify the quiz questions with your signed-in account. Sign out, sign in again, and retry." },
-      { status: 500 }
-    );
-  }
-
-  if (!questions || questions.length !== questionIds.length) {
-    console.error("Quiz submission question count mismatch:", {
-      submittedQuestionCount: questionIds.length,
-      verifiedQuestionCount: questions?.length ?? 0
-    });
-    return NextResponse.json(
-      { error: "Some quiz questions are no longer published or do not belong to this subject. Reload the quiz and try again." },
+      { error: "Answer every question using one of its displayed options." },
       { status: 400 }
     );
   }
 
-  const admin = createAdminClient();
-
-  const { data: answerKeys, error: answerError } = await admin
-    .from("question_answers")
-    .select("question_id, correct_option")
-    .in("question_id", questionIds);
-
-  if (answerError) {
-    console.error("Quiz submission answer-key lookup failed:", {
-      code: answerError.code,
-      message: answerError.message,
-      details: answerError.details,
-      hint: answerError.hint
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin.rpc("submit_quiz_session", {
+      p_user_id: user.id,
+      p_session_id: sessionId,
+      p_answers: answers
     });
-    return NextResponse.json(
-      { error: "The server could not access the answer key. Check that SUPABASE_SECRET_KEY belongs to the same project as NEXT_PUBLIC_SUPABASE_URL." },
-      { status: 500 }
-    );
-  }
 
-  if (!answerKeys || answerKeys.length !== questionIds.length) {
-    console.error("Quiz submission answer-key count mismatch:", {
-      submittedQuestionCount: questionIds.length,
-      answerKeyCount: answerKeys?.length ?? 0
+    if (error) {
+      console.error("Quiz session submission rejected:", {
+        code: error.code,
+        message: error.message
+      });
+
+      const message = /already been submitted|expired|not found|answer every question|selected options are invalid/i.test(error.message)
+        ? error.message
+        : "This quiz could not be submitted. Start a new quiz and try again.";
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+
+    if (!data || typeof data !== "object" || !("attemptId" in data)) {
+      console.error("Quiz submission RPC returned an invalid result.");
+      return NextResponse.json({ error: "Could not save your quiz result." }, { status: 500 });
+    }
+
+    return NextResponse.json(data, {
+      headers: { "Cache-Control": "no-store" }
     });
-    return NextResponse.json({ error: "The answer key is incomplete for this quiz. Contact an administrator." }, { status: 500 });
+  } catch (error) {
+    console.error("Quiz submission service failed:", error);
+    return NextResponse.json({ error: "Quiz service is temporarily unavailable." }, { status: 500 });
   }
-
-  const answerMap = new Map(answerKeys.map((item) => [item.question_id, item.correct_option]));
-  const correctCount = questionIds.reduce((count, id) => {
-    return count + (answers[id] === answerMap.get(id) ? 1 : 0);
-  }, 0);
-
-  const { data: attempt, error: attemptError } = await admin
-    .from("quiz_attempts")
-    .insert({
-      user_id: user.id,
-      subject_id: subjectId,
-      total_questions: questionIds.length,
-      correct_count: correctCount,
-      score: correctCount
-    })
-    .select("id")
-    .single();
-
-  if (attemptError || !attempt) {
-    return NextResponse.json({ error: "Could not save your quiz result." }, { status: 500 });
-  }
-
-  const responseRows = questionIds.map((id) => ({
-    attempt_id: attempt.id,
-    question_id: id,
-    selected_option: answers[id] || null,
-    is_correct: Boolean(answers[id] && answers[id] === answerMap.get(id))
-  }));
-
-  const { error: responseError } = await admin.from("quiz_responses").insert(responseRows);
-
-  if (responseError) {
-    await admin.from("quiz_attempts").delete().eq("id", attempt.id).eq("user_id", user.id);
-    return NextResponse.json({ error: "Could not save your submitted answers." }, { status: 500 });
-  }
-
-  return NextResponse.json({ attemptId: attempt.id, correctCount, totalQuestions: questionIds.length });
 }
