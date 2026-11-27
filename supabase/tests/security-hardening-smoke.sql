@@ -46,6 +46,15 @@ BEGIN
      OR NOT has_table_privilege('service_role', 'public.quiz_responses', 'INSERT') THEN
     RAISE EXCEPTION 'A required application permission was removed';
   END IF;
+
+  IF has_table_privilege('authenticated', 'public.questions', 'SELECT')
+     OR has_table_privilege('authenticated', 'public.question_answers', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.questions', 'INSERT')
+     OR NOT has_table_privilege('authenticated', 'public.question_answers', 'INSERT')
+     OR NOT has_table_privilege('service_role', 'public.questions', 'SELECT')
+     OR NOT has_table_privilege('service_role', 'public.question_answers', 'SELECT') THEN
+    RAISE EXCEPTION 'Question-bank access is not server-only';
+  END IF;
 END;
 $$;
 
