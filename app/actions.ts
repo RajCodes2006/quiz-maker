@@ -1,8 +1,42 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { enforceRateLimits, getTrustedClientIp } from "@/lib/rate-limit";
+
+async function enforceAuthRateLimit(
+  flow: "signin" | "signup",
+  email: string,
+  ipLimit: number,
+  accountLimit: number,
+  windowSeconds: number
+) {
+  const ip = getTrustedClientIp(await headers());
+  const rules = [
+    {
+      namespace: "auth:" + flow + ":email",
+      identifier: email.toLowerCase(),
+      limit: accountLimit,
+      windowSeconds
+    },
+    ...(ip
+      ? [{
+          namespace: "auth:" + flow + ":ip",
+          identifier: ip,
+          limit: ipLimit,
+          windowSeconds
+        }]
+      : [])
+  ];
+
+  try {
+    return await enforceRateLimits(rules);
+  } catch {
+    redirect("/login?mode=" + flow + "&error=Security+checks+are+temporarily+unavailable");
+  }
+}
 
 export async function signIn(formData: FormData) {
   if (!isSupabaseConfigured()) {
@@ -12,8 +46,13 @@ export async function signIn(formData: FormData) {
   const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
 
-  if (!email || !password) {
-    redirect("/login?mode=signin&error=Email+and+password+are+required");
+  if (!email || email.length > 320 || !password || password.length > 1024) {
+    redirect("/login?mode=signin&error=Enter+a+valid+email+and+password");
+  }
+
+  const allowed = await enforceAuthRateLimit("signin", email, 120, 20, 900);
+  if (!allowed) {
+    redirect("/login?mode=signin&error=Too+many+sign-in+attempts.+Wait+15+minutes+and+try+again");
   }
 
   const supabase = await createClient();
@@ -44,8 +83,13 @@ export async function signUp(formData: FormData) {
   const email = String(formData.get("email") || "").trim();
   const password = String(formData.get("password") || "");
 
-  if (!fullName || !email || password.length < 8) {
-    redirect("/login?mode=signup&error=Enter+your+name,+email+and+a+password+of+at+least+8+characters");
+  if (!fullName || fullName.length > 120 || !email || email.length > 320 || password.length < 8 || password.length > 1024) {
+    redirect("/login?mode=signup&error=Enter+your+name,+valid+email,+and+a+password+of+at+least+8+characters");
+  }
+
+  const allowed = await enforceAuthRateLimit("signup", email, 30, 5, 3600);
+  if (!allowed) {
+    redirect("/login?mode=signup&error=Too+many+registration+attempts.+Try+again+later");
   }
 
   const supabase = await createClient();
