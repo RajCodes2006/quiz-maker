@@ -1,64 +1,49 @@
 import Link from "next/link";
-import { signIn, signUp } from "@/app/actions";
-import GoogleSignInButton from "./google-sign-in-button";
+import AuthPanel from "./auth-panel";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 type Props = {
-  searchParams: Promise<{ error?: string; message?: string }>;
+  searchParams: Promise<{ error?: string; message?: string; mode?: string }>;
 };
 
 export default async function LoginPage({ searchParams }: Props) {
   const params = await searchParams;
 
   return (
-    <main className="auth-wrap">
-      <section className="auth-card">
-        <aside className="auth-aside">
+    <main className="auth-wrap auth-wrap-standard">
+      <section className="auth-card auth-card-standard">
+        <aside className="auth-aside auth-aside-standard">
           <Link className="brand" href="/">
-            <span className="brand-mark">CU</span><span>CU Quiz</span>
+            <span className="brand-mark">CU</span>
+            <span>CU Quiz</span>
           </Link>
-          <div>
-            <h1>Your next<br />practice session<br />starts here.</h1>
-            <p>Sign in to practise Chandigarh University subjects or manage the question bank.</p>
-          </div>
-          <small>CU Quiz · Chandigarh University</small>
-        </aside>
-        <div className="auth-content">
-          <h2>Welcome back</h2>
-          <p>Sign in with Google or use your email and password.</p>
-          {!isSupabaseConfigured() && (
-            <div className="notice notice-error">
-              Supabase is not connected yet. Copy .env.example to .env.local and add your project URL and publishable key.
+
+          <div className="auth-aside-copy">
+            <span className="eyebrow">CHANDIGARH UNIVERSITY</span>
+            <h1>Make every practice session count.</h1>
+            <p>
+              Build confidence one question at a time. Practise your subjects,
+              track your attempts and see your progress.
+            </p>
+            <div className="auth-feature-list">
+              <div><span>✓</span><p>Subject-wise MCQ practice</p></div>
+              <div><span>✓</span><p>Randomized questions and options</p></div>
+              <div><span>✓</span><p>Instant scores and saved attempts</p></div>
             </div>
-          )}
-          {params.error && <div className="notice notice-error">{params.error}</div>}
-          {params.message && <div className="notice">{params.message}</div>}
+          </div>
 
-          {isSupabaseConfigured() && (
-            <>
-              <GoogleSignInButton />
-              <div className="form-divider" />
-              <p className="muted" style={{ textAlign: "center", marginBottom: 18 }}>Or continue with email</p>
-            </>
-          )}
+          <div className="auth-aside-bottom">
+            <span className="auth-aside-dot" />
+            <span>Made for CU students</span>
+          </div>
+        </aside>
 
-          <form action={signIn}>
-            <div className="field"><label htmlFor="login-email">Email address</label><input id="login-email" name="email" type="email" autoComplete="email" required /></div>
-            <div className="field"><label htmlFor="login-password">Password</label><input id="login-password" name="password" type="password" autoComplete="current-password" required /></div>
-            <button className="button" type="submit" style={{ width: "100%" }}>Sign in</button>
-          </form>
-
-          <div className="form-divider" />
-          <div className="form-section-title">New to CU Quiz?</div>
-          <p className="muted">Create a student account. Admin access is granted separately by the project owner.</p>
-          <form action={signUp}>
-            <div className="field"><label htmlFor="signup-name">Full name</label><input id="signup-name" name="full_name" autoComplete="name" required /></div>
-            <div className="field"><label htmlFor="signup-email">Email address</label><input id="signup-email" name="email" type="email" autoComplete="email" required /></div>
-            <div className="field"><label htmlFor="signup-password">Password (8+ characters)</label><input id="signup-password" name="password" type="password" minLength={8} autoComplete="new-password" required /></div>
-            <button className="button button-quiet" type="submit" style={{ width: "100%" }}>Create student account</button>
-          </form>
-          <p className="muted" style={{ marginTop: 22 }}><Link href="/">← Back to home</Link></p>
-        </div>
+        <AuthPanel
+          configured={isSupabaseConfigured()}
+          initialMode={params.mode === "signup" ? "signup" : "signin"}
+          error={params.error}
+          message={params.message}
+        />
       </section>
     </main>
   );
