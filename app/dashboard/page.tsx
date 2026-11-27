@@ -17,18 +17,21 @@ export default async function DashboardPage() {
     );
   }
 
-  const { data: subjects } = await supabase
-    .from("subjects")
-    .select("id, name, slug, description")
-    .eq("is_active", true)
-    .order("name");
-
-  const { data: attempts } = await supabase
-    .from("quiz_attempts")
-    .select("id, subject_id, score, total_questions, completed_at")
-    .eq("user_id", user.id)
-    .order("completed_at", { ascending: false })
-    .limit(5);
+  const [subjectsResult, attemptsResult] = await Promise.all([
+    supabase
+      .from("subjects")
+      .select("id, name, slug, description")
+      .eq("is_active", true)
+      .order("name"),
+    supabase
+      .from("quiz_attempts")
+      .select("id, subject_id, score, total_questions, completed_at")
+      .eq("user_id", user.id)
+      .order("completed_at", { ascending: false })
+      .limit(5)
+  ]);
+  const subjects = subjectsResult.data;
+  const attempts = attemptsResult.data;
 
   return (
     <main className="app-shell">
