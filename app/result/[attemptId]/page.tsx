@@ -32,7 +32,7 @@ export default async function ResultPage({ params }: Props) {
   // Load saved responses only after verifying the attempt belongs to this user.
   const { data: responses, error: responsesError } = await admin
     .from("quiz_responses")
-    .select("question_id, selected_option_text, is_correct")
+    .select("question_id, selected_option, selected_option_text, is_correct")
     .eq("attempt_id", attempt.id)
     .order("question_id", { ascending: true });
 
@@ -86,7 +86,12 @@ export default async function ResultPage({ params }: Props) {
         // correct answer, it is safe to infer the selected text from the key.
         // For older incorrect answers, do not guess which shuffled option was picked.
         const selectedAnswer = response.selected_option_text
-          || (response.is_correct ? correctAnswer : null);
+          ? `${response.selected_option ? response.selected_option + ". " : ""}${response.selected_option_text}`
+          : response.is_correct
+            ? `${response.selected_option ? response.selected_option + ". " : ""}${correctAnswer ?? ""}`
+            : response.selected_option
+              ? `Option ${response.selected_option} (answer text was not saved for this older attempt)`
+              : null;
 
         return [{
           id: question.id,
