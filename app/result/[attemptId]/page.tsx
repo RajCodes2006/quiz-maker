@@ -29,24 +29,26 @@ export default async function ResultPage({ params }: Props) {
     ? Math.round((attempt.correct_count / attempt.total_questions) * 100)
     : 0;
 
-  // Read missed questions and their answer keys only on the server, after ownership
-  // of the attempt has been verified above.
-  const { data: wrongResponses, error: responsesError } = await admin
+  // Load every submitted question only after checking that this attempt belongs
+  // to the signed-in user. Correct-answer data never reaches the quiz screen.
+  const { data: responses, error: responsesError } = await admin
     .from("quiz_responses")
-    .select("question_id")
+    .select("question_id, is_correct")
     .eq("attempt_id", attempt.id)
-    .eq("is_correct", false);
+    .order("question_id", { ascending: true });
 
-  let wrongQuestions: {
+  type QuestionResult = {
     id: string;
     question_text: string;
-    correctOption: string | null;
-    correctText: string | null;
-  }[] = [];
-  let reviewUnavailable = Boolean(responsesError);
+    isCorrect: boolean;
+    correctAnswer: string | null;
+  };
 
-  if (!responsesError && wrongResponses && wrongResponses.length > 0) {
-    const questionIds = wrongResponses.map((response) => response.question_id);
+  let questionResults: QuestionResult[] = [];
+  let resultsUnavailable = Boolean(responsesError);
+
+  if (!responsesError && responses && responses.length > 0) {
+    const questionIds = responses.map((response) => response.question_id);
     const [questionsResult, answersResult] = await Promise.all([
       admin
         .from("questions")
@@ -59,7 +61,7 @@ export default async function ResultPage({ params }: Props) {
     ]);
 
     if (questionsResult.error || answersResult.error) {
-      reviewUnavailable = true;
+      resultsUnavailable = true;
     } else {
       const questionById = new Map(
         (questionsResult.data ?? []).map((question) => [question.id, question])
@@ -68,12 +70,12 @@ export default async function ResultPage({ params }: Props) {
         (answersResult.data ?? []).map((answer) => [answer.question_id, answer.correct_option])
       );
 
-      wrongQuestions = questionIds.flatMap((questionId) => {
-        const question = questionById.get(questionId);
+      questionResults = responses.flatMap((response) => {
+        const question = questionById.get(response.question_id);
         if (!question) return [];
 
-        const correctOption = answerById.get(questionId) ?? null;
-        const correctText =
+        const correctOption = answerById.get(response.question_id);
+        const correctAnswer =
           correctOption === "A" ? question.option_a :
           correctOption === "B" ? question.option_b :
           correctOption === "C" ? question.option_c :
@@ -83,8 +85,8 @@ export default async function ResultPage({ params }: Props) {
         return [{
           id: question.id,
           question_text: question.question_text,
-          correctOption,
-          correctText
+          isCorrect: response.is_correct,
+          correctAnswer: response.is_correct ? null : correctAnswer
         }];
       });
     }
@@ -96,58 +98,57 @@ export default async function ResultPage({ params }: Props) {
         <div className="eyebrow">QUIZ COMPLETED</div>
         <h1 className="page-heading" style={{ marginTop: 12 }}>{subject?.name || "Quiz result"}</h1>
         <p className="page-subtitle">Your result has been saved to your account.</p>
+
         <div style={{ marginTop: 34 }}>
           <div className="result-score">{percentage}%</div>
           <p className="muted">Overall score</p>
         </div>
+
         <div className="result-metrics">
-          <div className="metric"><strong>{attempt.correct_count}</strong><span>Correct answers</span></div>
-          <div className="metric"><strong>{attempt.total_questions - attempt.correct_count}</strong><span>Incorrect / unanswered</span></div>
+          <div className="metric"><strong>{attempt.correct_count}</strong><span>Correct</span></div>
+          <div className="metric"><strong>{attempt.total_questions - attempt.correct_count}</strong><span>Incorrect</span></div>
           <div className="metric"><strong>{attempt.total_questions}</strong><span>Total questions</span></div>
         </div>
+
         <p className="muted">Completed {new Date(attempt.completed_at).toLocaleString()}</p>
 
-        <section className="result-review" aria-labelledby="result-review-title">
-          <div className="result-review-heading">
-            <div>
-              <div className="eyebrow">ANSWER REVIEW</div>
-              <h2 id="result-review-title">Questions to revisit</h2>
-            </div>
-            {!reviewUnavailable && (
-              <span className="review-count">
-                {wrongQuestions.length} incorrect
-              </span>
+        <div className="question-results">
+          <div className="question-results-heading">
+            <h2>Question results</h2>
+            {!resultsUnavailable && (
+              <span>{questionResults.filter((item) => item.isCorrect).length} of {attempt.total_questions} correct</span>
             )}
           </div>
 
-          {reviewUnavailable ? (
+          {resultsUnavailable || questionResults.length === 0 ? (
             <div className="notice notice-error" role="status">
-              Your score was saved, but the question review could not be loaded. Refresh the page to try again.
-            </div>
-          ) : wrongQuestions.length === 0 ? (
-            <div className="review-perfect">
-              <strong>All correct. No mistakes to review.</strong>
-              <span>You got every question right in this attempt.</span>
+              Your score was saved, but the question-by-question results could not be loaded.
             </div>
           ) : (
-            <ol className="review-list">
-              {wrongQuestions.map((question, index) => (
-                <li className="review-item" key={question.id}>
-                  <div className="review-question-number">Question {index + 1}</div>
-                  <h3>{question.question_text}</h3>
-                  <div className="review-answer">
-                    <span>Correct answer</span>
-                    <strong>
-                      {question.correctOption && question.correctText
-                        ? `${question.correctOption}. ${question.correctText}`
-                        : "Correct answer unavailable"}
-                    </strong>
+            <ol className="question-results-list">
+              {questionResults.map((question, index) => (
+                <li
+                  className={"question-result-item " + (question.isCorrect ? "is-correct" : "is-incorrect")}
+                  key={question.id}
+                >
+                  <div className="question-result-topline">
+                    <span className="question-result-number">Question {index + 1}</span>
+                    <span className={"question-result-status " + (question.isCorrect ? "status-correct" : "status-incorrect")}>
+                      {question.isCorrect ? "✓ Correct" : "✕ Incorrect"}
+                    </span>
                   </div>
+                  <h3>{question.question_text}</h3>
+                  {!question.isCorrect && (
+                    <p className="question-correct-answer">
+                      <strong>Correct answer:</strong>{" "}
+                      {question.correctAnswer || "Unavailable"}
+                    </p>
+                  )}
                 </li>
               ))}
             </ol>
           )}
-        </section>
+        </div>
 
         <div className="hero-actions">
           <Link className="button" href="/dashboard">Back to subjects</Link>
