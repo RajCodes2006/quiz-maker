@@ -50,9 +50,9 @@ export async function POST(request: Request) {
     }
   }
 
-  const admin = createAdminClient();
-
-  const { data: subject, error: subjectError } = await admin
+  // Verify the subject with the same authenticated client that loaded the quiz.
+  // This avoids a false "unavailable" result caused by a mismatched server-only key.
+  const { data: subject, error: subjectError } = await supabase
     .from("subjects")
     .select("id")
     .eq("id", subjectId)
@@ -60,7 +60,6 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   if (subjectError) {
-    // Keep database details in the server terminal, not in the browser response.
     console.error("Quiz submission subject lookup failed:", {
       code: subjectError.code,
       message: subjectError.message,
@@ -68,16 +67,16 @@ export async function POST(request: Request) {
       hint: subjectError.hint
     });
     return NextResponse.json(
-      {
-        error: "Supabase could not verify this subject. Check that SUPABASE_SECRET_KEY belongs to the same project as NEXT_PUBLIC_SUPABASE_URL, then restart the server."
-      },
+      { error: "Could not verify this subject with your signed-in account. Please sign in again and retry." },
       { status: 500 }
     );
   }
 
   if (!subject) {
-    return NextResponse.json({ error: "This subject is inactive or does not exist in the connected Supabase project." }, { status: 404 });
+    return NextResponse.json({ error: "This subject is inactive or does not exist." }, { status: 404 });
   }
+
+  const admin = createAdminClient();
 
   const { data: questions, error: questionError } = await admin
     .from("questions")
