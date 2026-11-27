@@ -89,3 +89,54 @@ REVOKE ALL ON FUNCTION public.consume_api_rate_limit(text, integer, integer)
 FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.consume_api_rate_limit(text, integer, integer)
 TO service_role;
+
+-- Explicitly deny browser roles from server-only tables, even if table grants
+-- are accidentally widened in a future change. service_role bypasses RLS.
+DROP POLICY IF EXISTS "Deny client access to quiz sessions" ON public.quiz_sessions;
+CREATE POLICY "Deny client access to quiz sessions"
+  ON public.quiz_sessions FOR ALL TO anon, authenticated
+  USING (false) WITH CHECK (false);
+
+DROP POLICY IF EXISTS "Deny client access to API rate limits" ON private.api_rate_limits;
+CREATE POLICY "Deny client access to API rate limits"
+  ON private.api_rate_limits FOR ALL TO anon, authenticated
+  USING (false) WITH CHECK (false);
+
+-- Avoid duplicate permissive SELECT policies while keeping admin write access.
+DROP POLICY IF EXISTS "Admins manage subjects" ON public.subjects;
+DROP POLICY IF EXISTS "Admins insert subjects" ON public.subjects;
+CREATE POLICY "Admins insert subjects"
+  ON public.subjects FOR INSERT TO authenticated
+  WITH CHECK ((SELECT private.is_admin()));
+DROP POLICY IF EXISTS "Admins update subjects" ON public.subjects;
+CREATE POLICY "Admins update subjects"
+  ON public.subjects FOR UPDATE TO authenticated
+  USING ((SELECT private.is_admin()))
+  WITH CHECK ((SELECT private.is_admin()));
+DROP POLICY IF EXISTS "Admins delete subjects" ON public.subjects;
+CREATE POLICY "Admins delete subjects"
+  ON public.subjects FOR DELETE TO authenticated
+  USING ((SELECT private.is_admin()));
+
+DROP POLICY IF EXISTS "Admins manage questions" ON public.questions;
+DROP POLICY IF EXISTS "Admins insert questions" ON public.questions;
+CREATE POLICY "Admins insert questions"
+  ON public.questions FOR INSERT TO authenticated
+  WITH CHECK ((SELECT private.is_admin()));
+DROP POLICY IF EXISTS "Admins update questions" ON public.questions;
+CREATE POLICY "Admins update questions"
+  ON public.questions FOR UPDATE TO authenticated
+  USING ((SELECT private.is_admin()))
+  WITH CHECK ((SELECT private.is_admin()));
+DROP POLICY IF EXISTS "Admins delete questions" ON public.questions;
+CREATE POLICY "Admins delete questions"
+  ON public.questions FOR DELETE TO authenticated
+  USING ((SELECT private.is_admin()));
+
+-- Cover foreign keys used in joins and cascades.
+CREATE INDEX IF NOT EXISTS quiz_attempts_subject_id_idx
+  ON public.quiz_attempts(subject_id);
+CREATE INDEX IF NOT EXISTS quiz_responses_question_id_idx
+  ON public.quiz_responses(question_id);
+CREATE INDEX IF NOT EXISTS quiz_sessions_subject_id_idx
+  ON public.quiz_sessions(subject_id);
